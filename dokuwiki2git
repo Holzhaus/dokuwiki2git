@@ -77,6 +77,13 @@ class Converter:
 
 			# depending on type of change, either add or remove
 			pagepath, timestamp = self.get_pagepath_and_timestamp(filename)
+			if 'quickbooks' in pagepath or 'q.u.i.c.k.b.o.o.k.s' in pagepath:
+				continue
+			if pagepath == 'start':
+				pagepath = "Home"
+			else:
+				# This should work for most pages
+				pagepath = pagepath.replace('_', ' ').title()
 			pagefile = pagepath + self.extension
 			message = pagepath + ': ' + c[5]
 			user = c[4]
@@ -93,8 +100,20 @@ class Converter:
 				if len(dirname) > 0:
 					cmds.append((['mkdir', '-p', '--', dirname], {}))
 				cmds.append((['gunzip', '-c', filename], {'stdout': pagefile}))
+
+				# Fix anchor links
+				cmds.append((['python', '-c', r'import re,sys; print(re.sub(r"\[\[\#(.*?)(\|.+?)\]\]", lambda x: "[[#{}{}]]".format(x.group(1).replace("_", "-").replace(" ", "-"), x.group(2)), open(sys.argv[1]).read()))', pagefile], {'stdout': pagefile}))
+
+				# Fix lists
+				cmds.append((['sed', '-i', r's/^  \*\s*/  * /', pagefile], {}))
+				cmds.append((['sed', '-i', r's/^    \*\s*/  * /', pagefile], {}))
+
+
 				if self.convert:
 					cmds.append((['pandoc', '-f', 'dokuwiki', '-t', self.convert, '-o', pagefile, pagefile], {'ignore_exit': True}))
+
+					# Fix embedded internal wiki images
+					cmds.append((['sed', '-i', r's/\!\[\([^]]*\)\](\/\+\([^)]*\))/[[\/media\/\2|\1]]/g', pagefile], {}))
 				cmds.append((['git', 'add', '--force', '--', pagefile], {}))
 			elif c[2] == 'D': # delete
 				cmds.append((['git', 'rm', '--quiet', '--', pagefile], {'ignore_exit': True}))
