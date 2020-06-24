@@ -5,8 +5,10 @@ import fnmatch
 import logging
 import optparse
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib
 
@@ -40,11 +42,12 @@ class Converter:
 		for cmd, options in self.commands:
 			log.debug('CMD: %s' % cmd)
 			outputfile = options.get('stdout')
-			if outputfile:
-				with open(os.path.join(self.gitdir, outputfile), mode='w+b') as f:
-					ret = subprocess.call(cmd, stdout=f, cwd=self.gitdir)
-			else:
-				ret = subprocess.call(cmd, cwd=self.gitdir)
+			with tempfile.TemporaryFile() as stdoutfp:
+				ret = subprocess.call(cmd, stdout=stdoutfp, cwd=self.gitdir)
+				if ret == 0 and outputfile:
+					stdoutfp.seek(0)
+					with open(os.path.join(self.gitdir, outputfile), mode='w+b') as f:
+						shutil.copyfileobj(stdoutfp, f)
 			if ret != 0 and not options.get('ignore_exit', False):
 				raise RuntimeError('Command "%s" failed' % cmd)
 
